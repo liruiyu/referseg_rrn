@@ -15,8 +15,7 @@ pre-trained DeepLab-ResNet model can be downloaded from
 ## Usage
 Before training, make sure `refer`, `cocoapi`, and `deeplab` are in `PYTHONPATH`.
 ```
-export
-PYTHONPATH=./external/refer:./external/cocoapi/PythonAPI:./external/tensorflow-deeplab-resnet:$PYTHONPATH
+export PYTHONPATH=./external/refer:./external/cocoapi/PythonAPI:./external/tensorflow-deeplab-resnet:$PYTHONPATH
 ```
 
 To train a model on UNC dataset, run
