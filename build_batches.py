@@ -15,9 +15,9 @@ from pycocotools import mask as cocomask
 
 def build_referit_batches(setname, T, input_H, input_W):
     # data directory
-    im_dir = '/data/ryli/text_objseg/exp-referit/referit-dataset/images/'
-    mask_dir = '/data/ryli/text_objseg/exp-referit/referit-dataset/mask/'
-    query_file = './data/referit/referit_query_' + setname + '.json'
+    im_dir = './data/referit/images/'
+    mask_dir = './data/referit/mask/'
+    query_file = './data/referit_query_' + setname + '.json'
     vocab_file = './data/vocabulary_referit.txt'
 
     # saving directory
@@ -25,7 +25,6 @@ def build_referit_batches(setname, T, input_H, input_W):
     data_prefix = 'referit_' + setname
     if not os.path.isdir(data_folder):
         os.makedirs(data_folder)
-    fp = open('./referit/trainval_list.txt', 'w')
 
     # load annotations
     query_dict = json.load(open(query_file))
@@ -45,7 +44,6 @@ def build_referit_batches(setname, T, input_H, input_W):
     for n_batch in range(num_batch):
         print('saving batch %d / %d' % (n_batch + 1, num_batch))
         im_name, mask_name, sent = samples[n_batch]
-        fp.write('%d\t%s%s\n' % (n_batch, im_dir, im_name))
         im = skimage.io.imread(im_dir + im_name)
         mask = load_gt_mask(mask_dir + mask_name).astype(np.float32)
 
@@ -62,11 +60,10 @@ def build_referit_batches(setname, T, input_H, input_W):
             im_batch = im,
             mask_batch = (mask > 0),
             sent_batch = [sent])
-    fp.close()
 
 
 def build_coco_batches(dataset, setname, T, input_H, input_W):
-    im_dir = '/data/ryli/datasets/coco/images'
+    im_dir = './data/coco/images'
     im_type = 'train2014'
     vocab_file = './data/vocabulary_Gref.txt'
 

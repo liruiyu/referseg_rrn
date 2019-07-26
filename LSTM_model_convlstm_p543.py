@@ -34,7 +34,6 @@ class LSTM_model(object):
                         optimizer = 'adam',
                         weight_decay = 0.0005,
                         mode = 'eval',
-                        weights = 'resnet',
                         conv5 = False):
         self.batch_size = batch_size
         self.num_steps = num_steps
@@ -58,25 +57,16 @@ class LSTM_model(object):
         self.optimizer = optimizer
         self.weight_decay = weight_decay
         self.mode = mode
-        self.weights = weights
         self.conv5 = conv5
 
         self.words = tf.placeholder(tf.int32, [self.batch_size, self.num_steps])
         self.im = tf.placeholder(tf.float32, [self.batch_size, self.H, self.W, 3])
         self.target_fine = tf.placeholder(tf.float32, [self.batch_size, self.H, self.W, 1])
 
-        if self.weights == 'resnet':
-            resmodel = resnet_model.ResNet(batch_size=self.batch_size, 
-                                        atrous=True,
-                                        images=self.im,
-                                        labels=tf.constant(0.))
-            self.visual_feat = resmodel.logits
-            
-        elif self.weights == 'deeplab':
-            resmodel = deeplab101.DeepLabResNetModel({'data': self.im}, is_training=False)
-            self.visual_feat = resmodel.layers['res5c_relu']
-            self.visual_feat_c4 = resmodel.layers['res4b22_relu']
-            self.visual_feat_c3 = resmodel.layers['res3b3_relu']
+        resmodel = deeplab101.DeepLabResNetModel({'data': self.im}, is_training=False)
+        self.visual_feat = resmodel.layers['res5c_relu']
+        self.visual_feat_c4 = resmodel.layers['res4b22_relu']
+        self.visual_feat_c3 = resmodel.layers['res3b3_relu']
 
         with tf.variable_scope("text_objseg"):
             self.build_graph()
@@ -86,10 +76,7 @@ class LSTM_model(object):
 
     def build_graph(self):
 
-        if self.weights == 'deeplab':
-            visual_feat = self._conv("mlp0", self.visual_feat, 1, self.vf_dim, self.v_emb_dim, [1, 1, 1, 1])
-        elif self.weights == 'resnet':
-            visual_feat = self.visual_feat
+        visual_feat = self._conv("mlp0", self.visual_feat, 1, self.vf_dim, self.v_emb_dim, [1, 1, 1, 1])
             
         embedding_mat = tf.get_variable("embedding", [self.vocab_size, self.w_emb_dim], 
                                         initializer=tf.random_uniform_initializer(minval=-0.08, maxval=0.08))

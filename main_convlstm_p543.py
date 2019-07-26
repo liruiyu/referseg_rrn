@@ -10,7 +10,6 @@ import skimage
 # import matplotlib.pyplot as plt
 
 from LSTM_model_convlstm_p543 import LSTM_model
-# from RMI_model import RMI_model
 from pydensecrf import densecrf
 
 from util import data_reader
@@ -18,13 +17,11 @@ from util.processing_tools import *
 from util import im_processing, text_processing, eval_tools
 
 
-def train(modelname, max_iter, snapshot, dataset, weights, setname, mu, lr, bs, tfmodel_folder, conv5):
+def train(max_iter, snapshot, dataset, setname, mu, lr, bs, tfmodel_folder, conv5):
     iters_per_log = 100
     data_folder = './' + dataset + '/' + setname + '_batch/'
     data_prefix = dataset + '_' + setname
-    # tfmodel_folder = './' + dataset + '/tfmodel/'
-    # tfmodel_folder = './%s/ckpt_lr%.5f_bs%d/' % (dataset, lr, bs)
-    snapshot_file = os.path.join(tfmodel_folder, dataset + '_' + weights + '_' + modelname + '_iter_%d.tfmodel')
+    snapshot_file = os.path.join(tfmodel_folder, dataset + '_iter_%d.tfmodel')
     if not os.path.isdir(tfmodel_folder):
         os.makedirs(tfmodel_folder)
 
@@ -33,20 +30,11 @@ def train(modelname, max_iter, snapshot, dataset, weights, setname, mu, lr, bs, 
     decay = 0.99
     vocab_size = 8803 if dataset == 'referit' else 12112
 
-    if modelname == 'LSTM':
-        model = LSTM_model(mode='train', vocab_size=vocab_size, weights=weights, start_lr=lr, batch_size=bs, conv5=conv5)
-    elif modelname == 'RMI':
-        model = RMI_model(mode='train', vocab_size=vocab_size, weights=weights)
-    else:
-        raise ValueError('Unknown model name %s' % (modelname))
+    model = LSTM_model(mode='train', vocab_size=vocab_size, start_lr=lr, batch_size=bs, conv5=conv5)
 
-    if weights == 'resnet':
-        pretrained_model = './external/TF-resnet/model/ResNet101_init.tfmodel'
-        load_var = {var.op.name: var for var in tf.global_variables() if var.op.name.startswith('ResNet')}
-    elif weights == 'deeplab':
-        pretrained_model = '/data/ryli/text_objseg/tensorflow-deeplab-resnet/models/deeplab_resnet_init.ckpt'
-        load_var = {var.op.name: var for var in tf.global_variables()
-                        if var.name.startswith('res') or var.name.startswith('bn') or var.name.startswith('conv1')}
+    weights = './data/weights/deeplab_resnet_init.ckpt'
+    load_var = {var.op.name: var for var in tf.global_variables()
+                if var.name.startswith('res') or var.name.startswith('bn') or var.name.startswith('conv1')}
 
     snapshot_loader = tf.train.Saver(load_var)
     snapshot_saver = tf.train.Saver(max_to_keep = 1000)
@@ -55,7 +43,7 @@ def train(modelname, max_iter, snapshot, dataset, weights, setname, mu, lr, bs, 
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
-    snapshot_loader.restore(sess, pretrained_model)
+    snapshot_loader.restore(sess, weights)
 
     im_h, im_w, num_steps = model.H, model.W, model.num_steps
     text_batch = np.zeros((bs, num_steps), dtype=np.float32)
@@ -112,14 +100,14 @@ def train(modelname, max_iter, snapshot, dataset, weights, setname, mu, lr, bs, 
     print('Optimization done.')
 
 
-def test(modelname, iter, dataset, visualize, weights, setname, dcrf, mu, tfmodel_folder):
+def test(iter, dataset, visualize, setname, dcrf, mu, tfmodel_folder):
     data_folder = './' + dataset + '/' + setname + '_batch/'
     data_prefix = dataset + '_' + setname
     if visualize:
-        save_dir = './' + dataset + '/visualization/' + modelname + '_' + str(iter) + '/'
+        save_dir = './' + dataset + '/visualization/' + str(iter) + '/'
         if not os.path.isdir(save_dir):
             os.makedirs(save_dir)
-    pretrained_model = os.path.join(tfmodel_folder, dataset + '_' + weights + '_' + modelname + '_iter_' + str(iter) + '.tfmodel')
+    weights = os.path.join(tfmodel_folder, dataset + '_iter_' + str(iter) + '.tfmodel')
     
     score_thresh = 1e-9
     eval_seg_iou_list = [.5, .6, .7, .8, .9]
@@ -134,12 +122,7 @@ def test(modelname, iter, dataset, visualize, weights, setname, dcrf, mu, tfmode
     vocab_size = 8803 if dataset == 'referit' else 12112
     IU_result = list()
 
-    if modelname == 'LSTM':
-        model = LSTM_model(H=H, W=W, mode='eval', vocab_size=vocab_size, weights=weights)
-    elif modelname == 'RMI':
-        model = RMI_model(H=H, W=W, mode='eval', vocab_size=vocab_size, weights=weights)
-    else:
-        raise ValueError('Unknown model name %s' % (modelname))
+    model = LSTM_model(H=H, W=W, mode='eval', vocab_size=vocab_size)
 
     # Load pretrained model
     snapshot_restorer = tf.train.Saver()
@@ -147,7 +130,7 @@ def test(modelname, iter, dataset, visualize, weights, setname, dcrf, mu, tfmode
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
-    snapshot_restorer.restore(sess, pretrained_model)
+    snapshot_restorer.restore(sess, weights)
     reader = data_reader.DataReader(data_folder, data_prefix, shuffle=False)
 
     NN = reader.num_batch
@@ -239,7 +222,7 @@ def test(modelname, iter, dataset, visualize, weights, setname, dcrf, mu, tfmode
                 (str(eval_seg_iou_list[n_eval_iou]), seg_correct_dcrf[n_eval_iou]/seg_total)
         result_str += 'overall IoU = %f; mean IoU = %f\n' % (cum_I_dcrf/cum_U_dcrf, mean_dcrf_IoU/seg_total)
         print(result_str)
-    np.savez('IU_result_unc+.npz', IU_result)
+
 
 def visualize_seg(im, predicts, sent):
     im_seg = im / 2
@@ -252,43 +235,37 @@ def visualize_seg(im, predicts, sent):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-g', type = str, default = '0')
-    parser.add_argument('-m', type = str) # 'train' 'test'
-    parser.add_argument('-n', type = str, default = 'LSTM') # 'LSTM' 'RMI'
     parser.add_argument('-i', type = int, default = 800000)
     parser.add_argument('-s', type = int, default = 100000)
+    parser.add_argument('-m', type = str) # 'train' 'test'
     parser.add_argument('-d', type = str, default = 'referit') # 'Gref' 'unc' 'unc+' 'referit'
-    parser.add_argument('-v', default = False, action = 'store_true')
-    parser.add_argument('-c', default = False, action = 'store_true') # whether or not apply DenseCRF
-    parser.add_argument('-w', type = str, default = 'deeplab') # 'resnet' 'deeplab'
     parser.add_argument('-t', type = str) # 'train' 'trainval' 'val' 'test' 'testA' 'testB'
+    parser.add_argument('-f', type = str) # directory to save models
     parser.add_argument('-lr', type = float, default = 0.00025) # start learning rate
     parser.add_argument('-bs', type = int, default = 1) # batch size
-    parser.add_argument('-sfolder', type = str)
-    parser.add_argument('-conv5', default = False, action = 'store_true')
+    parser.add_argument('-v', default = False, action = 'store_true') # visualization
+    parser.add_argument('-c', default = False, action = 'store_true') # whether or not apply DenseCRF
+    parser.add_argument('-conv5', default = False, action = 'store_true') # finetune conv layers
 
     args = parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = args.g
     mu = np.array((104.00698793, 116.66876762, 122.67891434))
 
     if args.m == 'train':
-        train(modelname = args.n, 
-              max_iter = args.i, 
+        train(max_iter = args.i, 
               snapshot = args.s, 
               dataset = args.d, 
-              weights = args.w,
               setname = args.t,
               mu = mu,
               lr = args.lr,
               bs = args.bs,
-              tfmodel_folder = args.sfolder,
+              tfmodel_folder = args.f,
               conv5 = args.conv5)
     elif args.m == 'test':
-        test(modelname = args.n, 
-             iter = args.i, 
+        test(iter = args.i, 
              dataset = args.d, 
              visualize = args.v,
-             weights = args.w,
              setname = args.t,
              dcrf = args.c,
              mu = mu,
-             tfmodel_folder = args.sfolder)
+             tfmodel_folder = args.f)

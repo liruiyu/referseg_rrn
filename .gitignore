@@ -1,0 +1,14 @@
+data/coco
+data/referit
+data/weights
+
+external/cocoapi
+external/refer
+
+Gref/*
+unc/*
+unc+/*
+referit/*
+ckpts/*
+
+*.pyc
